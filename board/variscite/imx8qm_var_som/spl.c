@@ -1,5 +1,6 @@
 /*
- * Copyright 2018 NXP
+ * Copyright 2017-2018 NXP
+ * Copyright 2020 Variscite Ltd.
  *
  * SPDX-License-Identifier:	GPL-2.0+
  */
@@ -30,26 +31,49 @@
 #include <asm/arch/video_common.h>
 #include <power-domain.h>
 
+#include "../common/imx8_eeprom.h"
+
 DECLARE_GLOBAL_DATA_PTR;
 
-#define ESDHC_PAD_CTRL	((SC_PAD_CONFIG_OUT_IN << PADRING_CONFIG_SHIFT) | (SC_PAD_ISO_OFF << PADRING_LPCONFIG_SHIFT) \
+#define ESDHC_PAD_CTRL	((SC_PAD_CONFIG_NORMAL << PADRING_CONFIG_SHIFT) | (SC_PAD_ISO_OFF << PADRING_LPCONFIG_SHIFT) \
 						| (SC_PAD_28FDSOI_DSE_DV_HIGH << PADRING_DSE_SHIFT) | (SC_PAD_28FDSOI_PS_PU << PADRING_PULL_SHIFT))
 
 #define ESDHC_CLK_PAD_CTRL	((SC_PAD_CONFIG_OUT_IN << PADRING_CONFIG_SHIFT) | (SC_PAD_ISO_OFF << PADRING_LPCONFIG_SHIFT) \
-						| (SC_PAD_28FDSOI_DSE_DV_HIGH << PADRING_DSE_SHIFT) | (SC_PAD_28FDSOI_PS_PD << PADRING_PULL_SHIFT))
+						| (SC_PAD_28FDSOI_DSE_DV_HIGH << PADRING_DSE_SHIFT) | (SC_PAD_28FDSOI_PS_PU << PADRING_PULL_SHIFT))
 
 #define GPIO_PAD_CTRL	((SC_PAD_CONFIG_NORMAL << PADRING_CONFIG_SHIFT) | (SC_PAD_ISO_OFF << PADRING_LPCONFIG_SHIFT) \
 						| (SC_PAD_28FDSOI_DSE_DV_HIGH << PADRING_DSE_SHIFT) | (SC_PAD_28FDSOI_PS_PU << PADRING_PULL_SHIFT))
 
 #ifdef CONFIG_FSL_ESDHC
 
-#define USDHC1_PWR_GPIO		IMX_GPIO_NR(1, 7)
-#define USDHC1_ROUTE_GPIO	IMX_GPIO_NR(3, 9)
+enum {
+	SPEAR_MX8,
+	VAR_SOM_MX8,
+	UNKNOWN_BOARD,
+};
+
+static int get_board_id(void)
+{
+	struct var_eeprom eeprom;
+	static int board_id = UNKNOWN_BOARD;
+
+	if (board_id == UNKNOWN_BOARD) {
+		if (!var_scu_eeprom_read_header(&eeprom) &&
+		    var_eeprom_is_valid(&eeprom) && (eeprom.somrev & 0x40))
+			board_id = SPEAR_MX8;
+		else
+			board_id = VAR_SOM_MX8;
+	}
+
+	return board_id;
+}
 
 static struct fsl_esdhc_cfg usdhc_cfg[CONFIG_SYS_FSL_USDHC_NUM] = {
 	{USDHC1_BASE_ADDR, 0, 8},
 	{USDHC2_BASE_ADDR, 0, 4},
 };
+
+#define USDHC1_PWR_GPIO_SPEAR	IMX_GPIO_NR(4, 7)
 
 static iomux_cfg_t emmc0[] = {
 	SC_P_EMMC0_CLK | MUX_PAD_CTRL(ESDHC_CLK_PAD_CTRL),
@@ -62,9 +86,9 @@ static iomux_cfg_t emmc0[] = {
 	SC_P_EMMC0_DATA5 | MUX_PAD_CTRL(ESDHC_PAD_CTRL),
 	SC_P_EMMC0_DATA6 | MUX_PAD_CTRL(ESDHC_PAD_CTRL),
 	SC_P_EMMC0_DATA7 | MUX_PAD_CTRL(ESDHC_PAD_CTRL),
+	SC_P_EMMC0_RESET_B | MUX_PAD_CTRL(ESDHC_PAD_CTRL),
 	SC_P_EMMC0_STROBE | MUX_PAD_CTRL(ESDHC_PAD_CTRL),
 };
-
 static iomux_cfg_t usdhc1_sd[] = {
 	SC_P_USDHC1_CLK | MUX_PAD_CTRL(ESDHC_CLK_PAD_CTRL),
 	SC_P_USDHC1_CMD | MUX_PAD_CTRL(ESDHC_PAD_CTRL),
@@ -72,17 +96,17 @@ static iomux_cfg_t usdhc1_sd[] = {
 	SC_P_USDHC1_DATA1 | MUX_PAD_CTRL(ESDHC_PAD_CTRL),
 	SC_P_USDHC1_DATA2 | MUX_PAD_CTRL(ESDHC_PAD_CTRL),
 	SC_P_USDHC1_DATA3 | MUX_PAD_CTRL(ESDHC_PAD_CTRL),
-	SC_P_SPI0_CS1 | MUX_MODE_ALT(4) | MUX_PAD_CTRL(GPIO_PAD_CTRL),     /* Mux for PWR, GPIO1 IO07 */
-	SC_P_QSPI0A_DATA0 | MUX_MODE_ALT(4) | MUX_PAD_CTRL(GPIO_PAD_CTRL), /* Mux for SDIO Route, GPIO3 IO09 */
 	SC_P_USDHC1_VSELECT | MUX_PAD_CTRL(ESDHC_PAD_CTRL),
+};
+
+static iomux_cfg_t const usdhc1_pwr_pads_spear[] = {
+	SC_P_USDHC1_RESET_B | MUX_MODE_ALT(3) | MUX_PAD_CTRL(GPIO_PAD_CTRL),
 };
 
 int board_mmc_init(bd_t *bis)
 {
-
 	int i, ret;
 	sc_ipc_t ipcHndl = 0;
-
 	ipcHndl = gd->arch.ipc_channel_handle;
 
 	/*
@@ -90,6 +114,7 @@ int board_mmc_init(bd_t *bis)
 	 * (U-boot device node)    (Physical Port)
 	 * mmc0                    USDHC1
 	 * mmc1                    USDHC2
+	 * mmc2                    USDHC3
 	 */
 	for (i = 0; i < CONFIG_SYS_FSL_USDHC_NUM; i++) {
 		switch (i) {
@@ -106,23 +131,25 @@ int board_mmc_init(bd_t *bis)
 			ret = sc_pm_set_resource_power_mode(ipcHndl, SC_R_SDHC_1, SC_PM_PW_MODE_ON);
 			if (ret != SC_ERR_NONE)
 				return ret;
-			ret = sc_pm_set_resource_power_mode(ipcHndl, SC_R_GPIO_1, SC_PM_PW_MODE_ON);
+			ret = sc_pm_set_resource_power_mode(ipcHndl, SC_R_GPIO_4, SC_PM_PW_MODE_ON);
 			if (ret != SC_ERR_NONE)
 				return ret;
-			ret = sc_pm_set_resource_power_mode(ipcHndl, SC_R_GPIO_3, SC_PM_PW_MODE_ON);
-			if (ret != SC_ERR_NONE)
-				return ret;
+
 			imx8_iomux_setup_multiple_pads(usdhc1_sd, ARRAY_SIZE(usdhc1_sd));
+			if (get_board_id() == SPEAR_MX8)
+				imx8_iomux_setup_multiple_pads(usdhc1_pwr_pads_spear,
+					ARRAY_SIZE(usdhc1_pwr_pads_spear));
+
 			init_clk_usdhc(1);
 			usdhc_cfg[i].sdhc_clk = mxc_get_clock(MXC_ESDHC2_CLK);
-			gpio_request(USDHC1_ROUTE_GPIO, "sd1_route");
-			gpio_direction_output(USDHC1_ROUTE_GPIO, 0);
-			gpio_request(USDHC1_PWR_GPIO, "sd1_pwr");
-			gpio_direction_output(USDHC1_PWR_GPIO, 0);
-			mdelay(10);
-			gpio_direction_output(USDHC1_PWR_GPIO, 1);
-			break;
 
+			if (get_board_id() == SPEAR_MX8) {
+				gpio_request(USDHC1_PWR_GPIO_SPEAR, "sd1_pwr");
+				gpio_direction_output(USDHC1_PWR_GPIO_SPEAR, 0);
+				mdelay(10);
+				gpio_direction_output(USDHC1_PWR_GPIO_SPEAR, 1);
+			}
+			break;
 		default:
 			printf("Warning: you configured more USDHC controllers"
 				"(%d) than supported by the board\n", i + 1);
@@ -154,7 +181,8 @@ int board_mmc_getcd(struct mmc *mmc)
 
 	return ret;
 }
-#endif
+
+#endif /* CONFIG_FSL_ESDHC */
 
 void spl_board_init(void)
 {
@@ -168,6 +196,7 @@ void spl_board_init(void)
 		}
 	}
 #endif
+
 	puts("Normal Boot\n");
 }
 
@@ -188,9 +217,6 @@ void spl_board_prepare_for_boot(void)
 #ifdef CONFIG_SPL_LOAD_FIT
 int board_fit_config_name_match(const char *name)
 {
-	/* Just empty function now - can't decide what to choose */
-	debug("%s: %s\n", __func__, name);
-
 	return 0;
 }
 #endif
@@ -213,3 +239,4 @@ void board_init_f(ulong dummy)
 
 	board_init_r(NULL, 0);
 }
+
