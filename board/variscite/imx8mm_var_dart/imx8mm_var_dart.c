@@ -76,8 +76,13 @@ static int get_som_rev(void)
 #define WDOG_PAD_CTRL	(PAD_CTL_DSE6 | PAD_CTL_ODE | PAD_CTL_PUE | PAD_CTL_PE)
 
 static iomux_v3_cfg_t const uart1_pads[] = {
-	IMX8MM_PAD_UART1_RXD_UART1_RX | MUX_PAD_CTRL(UART_PAD_CTRL),
-	IMX8MM_PAD_UART1_TXD_UART1_TX | MUX_PAD_CTRL(UART_PAD_CTRL),
+	IMX8MM_PAD_UART1_RXD_UART1_TX | MUX_PAD_CTRL(UART_PAD_CTRL),
+	IMX8MM_PAD_UART1_TXD_UART1_RX | MUX_PAD_CTRL(UART_PAD_CTRL),
+};
+
+static iomux_v3_cfg_t const uart2_pads[] = {
+	IMX8MM_PAD_SAI3_TXFS_UART2_RX | MUX_PAD_CTRL(UART_PAD_CTRL),
+	IMX8MM_PAD_SAI3_TXC_UART2_TX | MUX_PAD_CTRL(UART_PAD_CTRL),
 };
 
 static iomux_v3_cfg_t const uart4_pads[] = {
@@ -103,8 +108,11 @@ int board_early_init_f(void)
 	id = get_board_id();
 
 	if (id == DART_MX8M_MINI) {
-		init_uart_clk(0);
-		imx_iomux_v3_setup_multiple_pads(uart1_pads, ARRAY_SIZE(uart1_pads));
+		// init_uart_clk(0);
+		// imx_iomux_v3_setup_multiple_pads(uart1_pads, ARRAY_SIZE(uart1_pads));
+		init_uart_clk(1);
+		mxc_base = (struct mxc_uart *)UART2_BASE_ADDR;
+		imx_iomux_v3_setup_multiple_pads(uart2_pads, ARRAY_SIZE(uart2_pads));
 	}else if (id == VAR_SOM_MX8M_MINI) {
 		init_uart_clk(3);
 		mxc_base = (struct mxc_uart *)UART4_BASE_ADDR;

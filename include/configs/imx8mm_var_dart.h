@@ -106,6 +106,7 @@
 	"script=boot.scr\0" \
 	"image=Image.gz\0" \
 	"console=ttymxc0,115200 earlycon=ec_imx6q,0x30860000,115200\0" \
+	"console=ttymxc1,115200 earlycon=ec_imx6q,0x30890000,115200\0" \
 	"img_addr=0x42000000\0"			\
 	"fdt_addr=0x43000000\0"			\
 	"fdt_high=0xffffffffffffffff\0"		\
@@ -276,6 +277,7 @@
 #define CONFIG_MXC_OCOTP
 #define CONFIG_CMD_FUSE
 
+/* I2C configs */
 #ifndef CONFIG_DM_I2C
 #define CONFIG_SYS_I2C
 #endif
