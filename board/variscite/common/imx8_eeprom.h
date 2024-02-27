@@ -13,14 +13,23 @@
 #define VAR_EEPROM_I2C_ADDR	0x52
 
 /* Optional SOM features */
-#define VAR_EEPROM_F_WIFI 	(1 << 0)
-#define VAR_EEPROM_F_ETH 	(1 << 1)
-#define VAR_EEPROM_F_AUDIO 	(1 << 2)
-#define VAR_EEPROM_F_LVDS	(1 << 3)
+#define VAR_EEPROM_F_WIFI		BIT(0)
+#define VAR_EEPROM_F_ETH		BIT(1)
+#define VAR_EEPROM_F_AUDIO		BIT(2)
+#define VAR_EEPROM_F_MX8M_LVDS		BIT(3)	/* i.MX8MM, i.MX8MN, i.MX8MQ only */
+#define VAR_EEPROM_F_MX8Q_SOC_ID	BIT(3)	/* 0 = i.MX8QM, 1 = i.MX8QP */
+#define VAR_EEPROM_F_NAND		BIT(4)
 
 /* SOM revision numbers */
 #define SOM_REV_1_1		0
 #define SOM_REV_1_2		1
+
+/* SOM storage types */
+enum som_storage {
+	SOM_STORAGE_EMMC,
+	SOM_STORAGE_NAND,
+	SOM_STORAGE_UNDEFINED,
+};
 
 /* Number of DRAM adjustment tables */
 #define DRAM_TABLE_NUM 7
@@ -56,10 +65,11 @@ extern int var_eeprom_read_header(struct var_eeprom *e);
 extern int var_scu_eeprom_read_header(struct var_eeprom *e);
 extern int var_eeprom_get_dram_size(struct var_eeprom *e, u32 *size);
 extern int var_eeprom_get_mac(struct var_eeprom *e, u8 *mac);
+extern int var_eeprom_get_storage(struct var_eeprom *e, int *storage);
 extern void var_eeprom_print_prod_info(struct var_eeprom *e);
 
 #if defined(CONFIG_SPL_BUILD) && defined(CONFIG_ARCH_IMX8M)
 extern void var_eeprom_adjust_dram(struct var_eeprom *e, struct dram_timing_info *d);
 #endif
 
-#endif /* _MX8M_VAR_EEPROM_H_ */
+#endif /* _MX8_VAR_EEPROM_H_ */

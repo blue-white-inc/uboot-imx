@@ -66,15 +66,15 @@ int var_scu_eeprom_read_header(struct var_eeprom *e)
 {
 	int ret;
 
-	ret = var_scu_eeprom_read((uint8_t *)e, sizeof(struct var_eeprom));
+	ret = var_scu_eeprom_read((uint8_t *)e, sizeof(*e));
 	if (ret) {
-		debug("SCU EEPROM read failed\n");
+		debug("%s: SCU EEPROM read failed\n", __func__);
 		return ret;
 	}
 
 	return 0;
 }
-#endif
+#endif /* ARCH_IMX8 */
 
 #ifdef CONFIG_DM_I2C
 static struct udevice *var_eeprom_init(void)
@@ -106,18 +106,18 @@ int var_eeprom_read_header(struct var_eeprom *e)
 	edev = var_eeprom_init();
 	if (!edev) {
 #ifdef CONFIG_ARCH_IMX8
-		debug("var_eeprom_read_header: calling SCU to read EEPROM\n");
+		debug("%s: calling SCU to read EEPROM\n", __func__);
 		return var_scu_eeprom_read_header(e);
 #else
-		debug("var_eeprom_read_header: I2C init failed\n");
+		debug("%s: I2C EEPROM probe failed\n", __func__);
 		return -1;
 #endif
 	}
 
-	/* Read EEPROM to memory */
+	/* Read EEPROM header to memory */
 	ret = dm_i2c_read(edev, 0, (void *)e, sizeof(*e));
 	if (ret) {
-		debug("EEPROM read failed, ret=%d\n", ret);
+		debug("%s: EEPROM read failed, ret=%d\n", __func__, ret);
 		return ret;
 	}
 
@@ -133,10 +133,10 @@ int var_eeprom_read_header(struct var_eeprom *e)
 	ret = i2c_probe(VAR_EEPROM_I2C_ADDR);
 	if (ret) {
 #ifdef CONFIG_ARCH_IMX8
-		debug("var_eeprom_read_header: calling SCU to read EEPROM\n");
+		debug("%s: calling SCU to read EEPROM\n", __func__);
 		return var_scu_eeprom_read_header(e);
 #else
-		printf("EEPROM init failed\n");
+		debug("%s: I2C EEPROM probe failed\n", __func__);
 		return -1;
 #endif
 	}
@@ -144,13 +144,13 @@ int var_eeprom_read_header(struct var_eeprom *e)
 	/* Read EEPROM header to memory */
 	ret = i2c_read(VAR_EEPROM_I2C_ADDR, 0, 1, (uint8_t *)e, sizeof(*e));
 	if (ret) {
-		printf("EEPROM read failed ret=%d\n", ret);
+		debug("%s: EEPROM read failed ret=%d\n", __func__, ret);
 		return -1;
 	}
 
 	return 0;
 }
-#endif
+#endif /* CONFIG_DM_I2C */
 
 int var_eeprom_get_mac(struct var_eeprom *e, u8 *buf)
 {
@@ -179,6 +179,19 @@ int var_eeprom_get_dram_size(struct var_eeprom *e, u32 *size)
 	return 0;
 }
 
+int var_eeprom_get_storage(struct var_eeprom *e, int *storage)
+{
+	if (!var_eeprom_is_valid(e))
+		return -1;
+
+	if (e->features & VAR_EEPROM_F_NAND)
+		*storage = SOM_STORAGE_NAND;
+	else
+		*storage = SOM_STORAGE_EMMC;
+
+	return 0;
+}
+
 #ifndef CONFIG_SPL_BUILD
 void var_eeprom_print_prod_info(struct var_eeprom *e)
 {
@@ -187,6 +200,7 @@ void var_eeprom_print_prod_info(struct var_eeprom *e)
 	if (!var_eeprom_is_valid(e))
 		return;
 
+	/* Read first part of P/N  */
 	memcpy(partnum, e->partnum, sizeof(e->partnum));
 
 	/* Read second part of P/N  */
@@ -200,6 +214,8 @@ void var_eeprom_print_prod_info(struct var_eeprom *e)
 		printf("\nPart number: VSM-DT8MM-%.*s\n", (int)sizeof(partnum), partnum);
 	else
 		printf("\nPart number: VSM-VS8MM-%.*s\n", (int)sizeof(partnum), partnum);
+#elif CONFIG_TARGET_IMX8MN_VAR_SOM
+	printf("\nPart number: VSM-MX8MN-%.*s\n", (int)sizeof(partnum), partnum);
 #elif CONFIG_TARGET_IMX8QXP_VAR_SOM
 	printf("\nPart number: VSM-MX8X-%.*s\n", (int)sizeof(partnum), partnum);
 #elif CONFIG_TARGET_IMX8QM_VAR_SOM
@@ -224,6 +240,8 @@ void var_eeprom_print_prod_info(struct var_eeprom *e)
 
 	debug("EEPROM version: 0x%x\n", e->version);
 	debug("SOM features: 0x%x\n", e->features);
+	debug("SOM revision: 0x%x\n", e->somrev);
+
 	if (e->version == 1)
 		debug("DRAM size: %d GiB\n\n", e->dramsize);
 	else
