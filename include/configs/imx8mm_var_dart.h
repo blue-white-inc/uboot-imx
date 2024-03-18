@@ -1,8 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright 2018 NXP
- * Copyright 2019 Variscite Ltd.
- *
- * SPDX-License-Identifier:	GPL-2.0+
+ * Copyright 2018-2020 Variscite Ltd.
  */
 
 #ifndef __IMX8MM_VAR_DART_H
@@ -17,17 +16,18 @@
 #define CONFIG_CSF_SIZE			0x2000 /* 8K region */
 #endif
 
-#define CONFIG_SPL_TEXT_BASE		0x7E1000
+#define CONFIG_SPL_TEXT_BASE		0x007E1000
 #define CONFIG_SPL_MAX_SIZE		(148 * 1024)
 #define CONFIG_SYS_MONITOR_LEN		(512 * 1024)
 #define CONFIG_SYS_MMCSD_RAW_MODE_U_BOOT_USE_SECTOR
 #define CONFIG_SYS_MMCSD_RAW_MODE_U_BOOT_SECTOR	0x300
 #define CONFIG_SYS_MMCSD_FS_BOOT_PARTITION	1
+#define CONFIG_SYS_UBOOT_BASE		(QSPI0_AMBA_BASE + CONFIG_SYS_MMCSD_RAW_MODE_U_BOOT_SECTOR * 512)
 
 #ifdef CONFIG_SPL_BUILD
 #define CONFIG_SPL_WATCHDOG_SUPPORT
-#define CONFIG_SPL_DRIVERS_MISC_SUPPORT
 #define CONFIG_SPL_POWER_SUPPORT
+#define CONFIG_SPL_DRIVERS_MISC_SUPPORT
 #define CONFIG_SPL_I2C_SUPPORT
 #define CONFIG_SPL_LDSCRIPT		"arch/arm/cpu/armv8/u-boot-spl.lds"
 #define CONFIG_SPL_STACK		0x91fff0
@@ -47,19 +47,28 @@
 
 #undef CONFIG_DM_MMC
 
-#define CONFIG_ENV_VARS_UBOOT_RUNTIME_CONFIG
-
 #define CONFIG_POWER
 #define CONFIG_POWER_I2C
 #define CONFIG_POWER_BD71837
+
+#define CONFIG_SYS_I2C
+#define CONFIG_SYS_I2C_MXC_I2C1		/* enable I2C bus 1 */
+#define CONFIG_SYS_I2C_MXC_I2C2		/* enable I2C bus 2 */
+#define CONFIG_SYS_I2C_MXC_I2C3		/* enable I2C bus 3 */
+#define CONFIG_SYS_I2C_MXC_I2C4		/* enable I2C bus 4 */
+
+#define CONFIG_ENV_VARS_UBOOT_RUNTIME_CONFIG
+
 #endif
+
+#define CONFIG_CMD_READ
+#define CONFIG_SERIAL_TAG
+#define CONFIG_FASTBOOT_USB_DEV 0
 
 #define CONFIG_REMAKE_ELF
 
 #define CONFIG_BOARD_EARLY_INIT_F
 #define CONFIG_BOARD_LATE_INIT
-
-/* Flat Device Tree Definitions */
 
 #undef CONFIG_CMD_EXPORTENV
 #undef CONFIG_CMD_IMPORTENV
@@ -69,23 +78,19 @@
 #undef CONFIG_BOOTM_NETBSD
 
 /* ENET Config */
-/* ENET1 */
 #if defined(CONFIG_CMD_NET)
 #define CONFIG_CMD_PING
 #define CONFIG_CMD_DHCP
 #define CONFIG_CMD_MII
 #define CONFIG_MII
 #define CONFIG_ETHPRIME			"FEC"
-
 #define CONFIG_FEC_MXC
 #define CONFIG_FEC_XCV_TYPE		RGMII
 #define FEC_QUIRK_ENET_MAC
-
 #define CONFIG_PHY_GIGE
 #define CONFIG_PHY_ATHEROS
 #endif
 
-/* UUU environment variables */
 #define CONFIG_MFG_ENV_SETTINGS \
 	CONFIG_MFG_ENV_SETTINGS_DEFAULT \
 	"initrd_addr=0x43800000\0" \
@@ -148,7 +153,11 @@
 					"setenv fdt_file fsl-imx8mm-var-som.dtb; " \
 				"fi;" \
 			"else " \
-				"setenv fdt_file fsl-imx8mm-var-dart.dtb;" \
+				"if test ${som_rev} -lt 2; then " \
+					"setenv fdt_file fsl-imx8mm-var-dart-1.x.dtb; " \
+				"else " \
+					"setenv fdt_file fsl-imx8mm-var-dart.dtb; " \
+				"fi; " \
 			"fi; " \
 		"fi; \0" \
 	"loadfdt=run findfdt; " \
@@ -204,23 +213,28 @@
 	"splashdisable=setenv splashfile; setenv splashimage\0"
 
 #define CONFIG_BOOTCOMMAND \
-	   "run ramsize_check; " \
-	   "mmc dev ${mmcdev}; if mmc rescan; then " \
-		   "if test ${use_m4} = yes && run loadm4bin; then " \
-			   "run runm4bin; " \
-		   "fi; " \
-		   "if run loadbootscript; then " \
-			   "run bootscript; " \
-		   "else " \
-			   "if run loadimage; then " \
-				   "run mmcboot; " \
-			   "else run netboot; " \
-			   "fi; " \
-		   "fi; " \
-	   "else booti ${loadaddr} - ${fdt_addr}; fi"
+	"run ramsize_check; " \
+	"mmc dev ${mmcdev}; "\
+	"if mmc rescan; then " \
+		"if test ${use_m4} = yes && run loadm4bin; then " \
+			"run runm4bin; " \
+		"fi; " \
+		"if run loadbootscript; then " \
+			"run bootscript; " \
+		"else " \
+			"if run loadimage; then " \
+				"run mmcboot; " \
+			"else " \
+				"run netboot; " \
+			"fi; " \
+		"fi; " \
+	"else " \
+		"booti ${loadaddr} - ${fdt_addr}; " \
+	"fi;"
 
 /* Link Definitions */
 #define CONFIG_LOADADDR			0x40480000
+
 #define CONFIG_SYS_LOAD_ADDR		CONFIG_LOADADDR
 
 #define CONFIG_SYS_INIT_RAM_ADDR	0x40000000
@@ -243,7 +257,8 @@
 #define DEFAULT_DRAM_SIZE_MB		512
 
 #define CONFIG_SYS_MEMTEST_START	PHYS_SDRAM
-#define CONFIG_SYS_MEMTEST_END		(CONFIG_SYS_MEMTEST_START + (256 * SZ_1M))
+#define CONFIG_SYS_MEMTEST_END		(CONFIG_SYS_MEMTEST_START + \
+					(DEFAULT_DRAM_SIZE_MB >> 1) * SZ_1M)
 
 #define CONFIG_BAUDRATE			115200
 
@@ -256,7 +271,7 @@
 #define CONFIG_SYS_PROMPT_HUSH_PS2	"> "
 #define CONFIG_SYS_CBSIZE		2048
 #define CONFIG_SYS_MAXARGS		64
-#define CONFIG_SYS_BARGSIZE CONFIG_SYS_CBSIZE
+#define CONFIG_SYS_BARGSIZE		CONFIG_SYS_CBSIZE
 #define CONFIG_SYS_PBSIZE		(CONFIG_SYS_CBSIZE + \
 					sizeof(CONFIG_SYS_PROMPT) + 16)
 #define CONFIG_IMX_BOOTAUX
@@ -270,6 +285,7 @@
 #define CONFIG_SYS_FSL_ESDHC_ADDR	0
 
 #define CONFIG_SUPPORT_EMMC_BOOT	/* eMMC specific */
+#define CONFIG_SYS_MMC_IMG_LOAD_PART	1
 
 #define CONFIG_MXC_GPIO
 
@@ -283,27 +299,25 @@
 #define CONFIG_SYS_I2C_MXC_I2C1		/* enable I2C bus 1 */
 #define CONFIG_SYS_I2C_MXC_I2C2		/* enable I2C bus 2 */
 #define CONFIG_SYS_I2C_MXC_I2C3		/* enable I2C bus 3 */
+#define CONFIG_SYS_I2C_MXC_I2C4		/* enable I2C bus 4 */
 #define CONFIG_SYS_I2C_SPEED		100000
 
 /* USB configs */
 #ifndef CONFIG_SPL_BUILD
 #define CONFIG_CMD_USB
 #define CONFIG_USB_STORAGE
+#define CONFIG_USBD_HS
+
 #define CONFIG_CMD_USB_MASS_STORAGE
 #define CONFIG_USB_GADGET_MASS_STORAGE
 #define CONFIG_USB_FUNCTION_MASS_STORAGE
-#define CONFIG_CMD_READ
+
 #endif
 
-#define CONFIG_SERIAL_TAG
-#define CONFIG_FASTBOOT_USB_DEV		0
-
-#define CONFIG_USB_MAX_CONTROLLER_COUNT	2
-
-#define CONFIG_USBD_HS
-#define CONFIG_USB_GADGET_VBUS_DRAW	2
+#define CONFIG_USB_GADGET_VBUS_DRAW 2
 
 #define CONFIG_MXC_USB_PORTSC		(PORT_PTS_UTMI | PORT_PTS_PTW)
+#define CONFIG_USB_MAX_CONTROLLER_COUNT	2
 
 #define CONFIG_OF_SYSTEM_SETUP
 
