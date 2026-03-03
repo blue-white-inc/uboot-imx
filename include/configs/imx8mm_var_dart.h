@@ -110,7 +110,7 @@
 			"else " \
 				"setenv module_name imx8mm-var-dart; " \
 				"if test $carrier_name = undefined; then " \
-					"setenv carrier_name sonata; " \
+					"setenv carrier_name dt8mcustomboard; " \
 				"fi; " \
 			"fi; " \
 			"if test ${som_rev} -lt 2; then " \
